@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './UploadComponent.css';
 
 // The CORRECT, Vite-compatible way to import ALL dependencies
-import * as pdfjs from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist/build/pdf.js';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
