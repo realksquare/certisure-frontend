@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-// No CSS import if you don't have UploadComponent.css
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
@@ -21,19 +20,39 @@ const UploadComponent = ({ title, userType }) => {
         }
 
         setLoading(true);
-        setStatus('Uploading and processing PDF...');
+        setStatus('Processing PDF locally...');
 
         try {
-            const formData = new FormData();
-            formData.append('pdf', file);
+            // TODO: Add your PDF QR code scanning logic here
+            // For now, we'll use dummy data as an example
+            
+            // This is where you'd extract the QR code data from the PDF
+            // const certificateData = await extractQrDataFromPdf(file);
+            
+            // For testing, let's use dummy data:
+            const certificateData = {
+                studentName: "John Doe",
+                certificateId: "CERT12345",
+                course: "Web Development",
+                issueDate: "2025-10-02",
+                institution: "Tech University"
+            };
 
             const endpoint = userType === 'institution' 
-                ? '/api/upload-for-creation'
-                : '/api/upload-for-verification';
+                ? '/api/create-record'
+                : '/api/verify-record';
 
+            const payload = userType === 'institution'
+                ? { certificateData }
+                : { dataHash: createStableHash(certificateData) };
+
+            setStatus('Sending data to server...');
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, {
                 method: 'POST',
-                body: formData,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
             });
 
             const resData = await res.json();
@@ -53,6 +72,26 @@ const UploadComponent = ({ title, userType }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Helper function to create hash (same as backend)
+    const createStableHash = (data) => {
+        const sortObject = (obj) => {
+            if (typeof obj !== 'object' || obj === null) return obj;
+            return Object.keys(obj).sort().reduce((acc, key) => {
+                acc[key] = sortObject(obj[key]);
+                return acc;
+            }, {});
+        };
+        const sortedData = sortObject(data);
+        const stringToHash = JSON.stringify(sortedData);
+        
+        // Use Web Crypto API for hashing
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(stringToHash))
+            .then(hashBuffer => {
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            });
     };
 
     return (
