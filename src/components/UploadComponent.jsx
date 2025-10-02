@@ -1,24 +1,31 @@
 import React, { useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+import jsQR from 'jsqr';
+import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
 
-// The CORRECT, Vite-compatible way to import ALL dependencies
-import * as pdfjs from 'pdfjs-dist/build/pdf.js';
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
-pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
-import jsQR from 'jsqr/dist/jsQR.js';
-import SHA256 from 'crypto-js/esm/sha256.js';
-
+// Set up the worker for react-pdf
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
     const [status, setStatus] = useState('');
     const [result, setResult] = useState(null);
+    const [numPages, setNumPages] = useState(null);
 
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
         setStatus('');
         setResult(null);
+    };
+
+    const onDocumentLoadSuccess = ({ numPages }) => {
+        setNumPages(numPages);
     };
 
     const createStableHash = (data) => {
@@ -34,39 +41,6 @@ const UploadComponent = ({ title, userType }) => {
         return SHA256(stringToHash).toString();
     };
 
-    const getQrDataFromPdf = async (file) => {
-        const fileReader = new FileReader();
-        return new Promise((resolve, reject) => {
-            fileReader.onload = async (event) => {
-                const data = new Uint8Array(event.target.result);
-                try {
-                    const pdf = await pdfjs.getDocument(data).promise;
-                    const page = await pdf.getPage(1);
-                    const viewport = page.getViewport({ scale: 1.5 });
-
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    await page.render({ canvasContext: context, viewport }).promise;
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-                    if (code) {
-                        resolve(code.data);
-                    } else {
-                        reject(new Error('Could not find a QR code in the PDF.'));
-                    }
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            fileReader.onerror = reject;
-            fileReader.readAsArrayBuffer(file);
-        });
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!file) {
@@ -77,7 +51,21 @@ const UploadComponent = ({ title, userType }) => {
         setStatus('Processing PDF... Please wait.');
 
         try {
-            const rawQrData = await getQrDataFromPdf(file);
+            // react-pdf renders the page to a canvas, which we can then grab
+            const canvas = document.querySelector('.react-pdf__Page__canvas');
+            if (!canvas) {
+                throw new Error("Could not find the rendered PDF page. Please wait a moment and try again.");
+            }
+            
+            const context = canvas.getContext('2d');
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (!code) {
+                throw new Error('Could not find a QR code in the PDF.');
+            }
+
+            const rawQrData = code.data;
             const certificateData = JSON.parse(rawQrData);
             const dataHash = createStableHash(certificateData);
 
@@ -93,7 +81,6 @@ const UploadComponent = ({ title, userType }) => {
             }
 
             setStatus('Contacting server...');
-            // MAKE SURE YOU HAVE YOUR REAL BACKEND URL HERE
             const res = await fetch(`https://certisure-backend-omega.vercel.app${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -120,6 +107,14 @@ const UploadComponent = ({ title, userType }) => {
     return (
         <div className="upload-container">
             <h2>{title}</h2>
+            {/* The Document component handles rendering */}
+            {file && (
+                 <div className="pdf-preview">
+                    <Document file={file} onLoadSuccess={onDocumentLoadSuccess}>
+                        <Page pageNumber={1} />
+                    </Document>
+                </div>
+            )}
             <form onSubmit={handleSubmit}>
                 <input type="file" accept=".pdf" onChange={handleFileChange} />
                 <button type="submit">Upload & Process</button>
