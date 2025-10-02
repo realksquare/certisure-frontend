@@ -1,19 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import jsQR from 'jsqr';
-import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
 
-// Set up the worker for react-pdf. This is the official, correct way.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// The CORRECT, Vite-compatible way to import ALL dependencies
+import * as pdfjs from 'pdfjs-dist/build/pdf.js';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const options = {
-  cMapUrl: '/cmaps/',
-  standardFontDataUrl: '/standard_fonts/',
-};
+import jsQR from 'jsqr/dist/jsQR.js';
+import SHA256 from 'crypto-js/esm/sha256.js';
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
@@ -41,7 +35,6 @@ const UploadComponent = ({ title, userType }) => {
     };
 
     const handleProcessClick = () => {
-        // The onRenderSuccess callback on the <Page> component will trigger the processing
         setStatus('Processing PDF... The page will render invisibly to be scanned.');
     };
 
@@ -86,7 +79,7 @@ const UploadComponent = ({ title, userType }) => {
             }
 
             setStatus('Contacting server...');
-            const res = await fetch(`https://certisure-backend-omega.vercel.app${endpoint}`, {
+            const res = await fetch(`https://certisure-backend.vercel.app${endpoint}`, { // Assuming your backend URL is this
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -115,10 +108,9 @@ const UploadComponent = ({ title, userType }) => {
                 <button onClick={handleProcessClick} disabled={!file}>Process PDF</button>
             </div>
 
-            {/* The Document component handles rendering. We hide it but use it to generate the canvas. */}
             <div className="pdf-preview" style={{ display: 'none' }}>
                 {file && (
-                    <Document file={file} options={options}>
+                    <Document file={file}>
                         <Page pageNumber={1} onRenderSuccess={onRenderSuccess} renderTextLayer={false} renderAnnotationLayer={false} />
                     </Document>
                 )}
