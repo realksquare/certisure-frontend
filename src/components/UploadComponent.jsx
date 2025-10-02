@@ -31,7 +31,7 @@ const UploadComponent = ({ title, userType }) => {
                 ? '/api/upload-for-creation'
                 : '/api/upload-for-verification';
 
-            const res = await fetch(`https://certisure-backend-omega.vercel.app${endpoint}`, {
+            const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, {
                 method: 'POST',
                 body: formData,
             });
