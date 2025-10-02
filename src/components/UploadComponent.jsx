@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// Remove this line: import './UploadComponent.css';
+// No CSS import if you don't have UploadComponent.css
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
