@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
@@ -6,11 +6,16 @@ import jsQR from 'jsqr';
 import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
 
-// Set up the worker for react-pdf
+// Set up the worker for react-pdf. This is the official, correct way.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString();
+
+const options = {
+  cMapUrl: '/cmaps/',
+  standardFontDataUrl: '/standard_fonts/',
+};
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
@@ -22,10 +27,6 @@ const UploadComponent = ({ title, userType }) => {
         setFile(e.target.files[0]);
         setStatus('');
         setResult(null);
-    };
-
-    const onDocumentLoadSuccess = ({ numPages }) => {
-        setNumPages(numPages);
     };
 
     const createStableHash = (data) => {
@@ -41,22 +42,11 @@ const UploadComponent = ({ title, userType }) => {
         return SHA256(stringToHash).toString();
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!file) {
-            setStatus('Please select a file.');
-            return;
-        }
-
-        setStatus('Processing PDF... Please wait.');
-
+    // This function will be called when the PDF page has rendered to a canvas
+    const onRenderSuccess = useCallback((canvas) => {
+        if (!canvas) return;
+        
         try {
-            // react-pdf renders the page to a canvas, which we can then grab
-            const canvas = document.querySelector('.react-pdf__Page__canvas');
-            if (!canvas) {
-                throw new Error("Could not find the rendered PDF page. Please wait a moment and try again.");
-            }
-            
             const context = canvas.getContext('2d');
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
             const code = jsQR(imageData.data, imageData.width, imageData.height);
@@ -66,6 +56,15 @@ const UploadComponent = ({ title, userType }) => {
             }
 
             const rawQrData = code.data;
+            handleVerification(rawQrData);
+
+        } catch (error) {
+             setStatus(`Error processing PDF: ${error.message}`);
+        }
+    }, [userType]);
+
+    const handleVerification = async (rawQrData) => {
+        try {
             const certificateData = JSON.parse(rawQrData);
             const dataHash = createStableHash(certificateData);
 
@@ -97,28 +96,26 @@ const UploadComponent = ({ title, userType }) => {
             if (resData.verified) {
                 setResult(resData.certificate);
             }
-
         } catch (error) {
-            setStatus(`Error: ${error.message}`);
-            setResult(null);
+             setStatus(`Error during verification: ${error.message}`);
         }
     };
+
 
     return (
         <div className="upload-container">
             <h2>{title}</h2>
-            {/* The Document component handles rendering */}
+            <form onSubmit={(e) => e.preventDefault()}>
+                <input type="file" accept=".pdf" onChange={handleFileChange} />
+            </form>
+            {/* The Document component handles rendering. We hide it but use it to generate the canvas. */}
             {file && (
-                 <div className="pdf-preview">
-                    <Document file={file} onLoadSuccess={onDocumentLoadSuccess}>
-                        <Page pageNumber={1} />
+                 <div className="pdf-preview" style={{ display: 'none' }}>
+                    <Document file={file} options={options}>
+                        <Page pageNumber={1} onRenderSuccess={onRenderSuccess} />
                     </Document>
                 </div>
             )}
-            <form onSubmit={handleSubmit}>
-                <input type="file" accept=".pdf" onChange={handleFileChange} />
-                <button type="submit">Upload & Process</button>
-            </form>
             {status && <p className="status-message">{status}</p>}
             {result && (
                 <div className="result-container">
