@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { getDocument } from 'pdfjs-dist';
-import jsQR from 'jsqr';
-import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
+
+// The CORRECT, Vite-compatible way to import ALL dependencies
+import * as pdfjs from 'pdfjs-dist/build/pdf.js';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+import jsQR from 'jsqr/dist/jsQR.js';
+import SHA256 from 'crypto-js/esm/sha256.js';
 
 
 const UploadComponent = ({ title, userType }) => {
@@ -35,7 +40,7 @@ const UploadComponent = ({ title, userType }) => {
             fileReader.onload = async (event) => {
                 const data = new Uint8Array(event.target.result);
                 try {
-                    const pdf = await getDocument(data).promise;
+                    const pdf = await pdfjs.getDocument(data).promise;
                     const page = await pdf.getPage(1);
                     const viewport = page.getViewport({ scale: 1.5 });
 
