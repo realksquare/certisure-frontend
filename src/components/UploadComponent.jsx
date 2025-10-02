@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
 import * as pdfjs from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
 import jsQR from 'jsqr/dist/jsQR.js';
+import SHA256 from 'crypto-js/esm/sha256.js';
 
 
 const UploadComponent = ({ title, userType }) => {
