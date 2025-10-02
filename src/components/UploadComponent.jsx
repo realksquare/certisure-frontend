@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import './UploadComponent.css';
+
+// The CORRECT, Vite-compatible way to import ALL dependencies
 import * as pdfjs from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -91,6 +93,7 @@ const UploadComponent = ({ title, userType }) => {
             }
 
             setStatus('Contacting server...');
+            // MAKE SURE YOU HAVE YOUR REAL BACKEND URL HERE
             const res = await fetch(`https://certisure-backend-omega.vercel.app${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
