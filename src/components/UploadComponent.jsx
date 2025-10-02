@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.js';
 import jsQR from 'jsqr';
 import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
+
+// The CORRECT, Vite-compatible way to import pdfjs-dist
+import * as pdfjs from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
@@ -34,7 +39,7 @@ const UploadComponent = ({ title, userType }) => {
             fileReader.onload = async (event) => {
                 const data = new Uint8Array(event.target.result);
                 try {
-                    const pdf = await getDocument(data).promise;
+                    const pdf = await pdfjs.getDocument(data).promise;
                     const page = await pdf.getPage(1);
                     const viewport = page.getViewport({ scale: 1.5 });
 
@@ -87,6 +92,7 @@ const UploadComponent = ({ title, userType }) => {
             }
 
             setStatus('Contacting server...');
+            // MAKE SURE YOU HAVE YOUR REAL BACKEND URL HERE
             const res = await fetch(`https://certisure-backend-omega.vercel.app${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
