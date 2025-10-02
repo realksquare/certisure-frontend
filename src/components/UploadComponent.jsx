@@ -4,10 +4,6 @@ import jsQR from 'jsqr';
 import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
 
-// The following CSS imports were causing the build to fail. They are not needed for our use case.
-// import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-// import 'react-pdf/dist/esm/Page/TextLayer.css';
-
 // Set up the worker for react-pdf. This is the official, correct way.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -46,7 +42,6 @@ const UploadComponent = ({ title, userType }) => {
 
     const handleProcessClick = () => {
         // The onRenderSuccess callback on the <Page> component will trigger the processing
-        // We just need to make sure the component is rendered, which it is.
         setStatus('Processing PDF... The page will render invisibly to be scanned.');
     };
 
