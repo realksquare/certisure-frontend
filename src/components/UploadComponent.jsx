@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
 import jsQR from 'jsqr';
 import SHA256 from 'crypto-js/sha256';
 import './UploadComponent.css';
+
+// The following CSS imports were causing the build to fail. They are not needed for our use case.
+// import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+// import 'react-pdf/dist/esm/Page/TextLayer.css';
 
 // Set up the worker for react-pdf. This is the official, correct way.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -21,11 +23,11 @@ const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
     const [status, setStatus] = useState('');
     const [result, setResult] = useState(null);
-    const [numPages, setNumPages] = useState(null);
 
     const handleFileChange = (e) => {
-        setFile(e.target.files[0]);
-        setStatus('');
+        const selectedFile = e.target.files[0];
+        setFile(selectedFile);
+        setStatus(selectedFile ? 'PDF selected. Click "Process PDF" to scan.' : '');
         setResult(null);
     };
 
@@ -42,10 +44,19 @@ const UploadComponent = ({ title, userType }) => {
         return SHA256(stringToHash).toString();
     };
 
-    // This function will be called when the PDF page has rendered to a canvas
+    const handleProcessClick = () => {
+        // The onRenderSuccess callback on the <Page> component will trigger the processing
+        // We just need to make sure the component is rendered, which it is.
+        setStatus('Processing PDF... The page will render invisibly to be scanned.');
+    };
+
     const onRenderSuccess = useCallback((canvas) => {
-        if (!canvas) return;
+        if (!canvas) {
+            setStatus('Error: PDF canvas could not be rendered.');
+            return;
+        }
         
+        setStatus('PDF rendered, scanning for QR code...');
         try {
             const context = canvas.getContext('2d');
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -101,21 +112,23 @@ const UploadComponent = ({ title, userType }) => {
         }
     };
 
-
     return (
         <div className="upload-container">
             <h2>{title}</h2>
-            <form onSubmit={(e) => e.preventDefault()}>
+            <div className="form-controls">
                 <input type="file" accept=".pdf" onChange={handleFileChange} />
-            </form>
+                <button onClick={handleProcessClick} disabled={!file}>Process PDF</button>
+            </div>
+
             {/* The Document component handles rendering. We hide it but use it to generate the canvas. */}
-            {file && (
-                 <div className="pdf-preview" style={{ display: 'none' }}>
+            <div className="pdf-preview" style={{ display: 'none' }}>
+                {file && (
                     <Document file={file} options={options}>
-                        <Page pageNumber={1} onRenderSuccess={onRenderSuccess} />
+                        <Page pageNumber={1} onRenderSuccess={onRenderSuccess} renderTextLayer={false} renderAnnotationLayer={false} />
                     </Document>
-                </div>
-            )}
+                )}
+            </div>
+
             {status && <p className="status-message">{status}</p>}
             {result && (
                 <div className="result-container">
