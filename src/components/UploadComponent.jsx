@@ -5,7 +5,7 @@ import SHA256 from 'crypto-js/sha256';
 import * as pdfjsLib from 'pdfjs-dist';
 import jsQR from 'jsqr';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 
 const UploadComponent = ({ title, userType }) => {
@@ -34,9 +34,8 @@ const UploadComponent = ({ title, userType }) => {
                 try {
                     const typedarray = new Uint8Array(fileReader.result);
                     const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    const page = await pdf.getPage(1); // We'll scan the first page
+                    const page = await pdf.getPage(1); // Scan the first page
 
-                    // Render the PDF page to a hidden canvas to get image data
                     const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better QR accuracy
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
@@ -45,10 +44,7 @@ const UploadComponent = ({ title, userType }) => {
 
                     await page.render({ canvasContext: context, viewport: viewport }).promise;
                     
-                    // Get the image data from the canvas
                     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    
-                    // Scan for a QR code
                     const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                     if (code && code.data) {
@@ -79,7 +75,6 @@ const UploadComponent = ({ title, userType }) => {
         setResult(null);
 
         try {
-            // --- REAL PDF SCANNING LOGIC IS NOW ACTIVE ---
             const certificateData = await extractQrDataFromPdf(file);
 
             const endpoint = userType === 'institution'
