@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SHA256 from 'crypto-js/sha256';
 
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
@@ -20,50 +21,49 @@ const UploadComponent = ({ title, userType }) => {
         }
 
         setLoading(true);
-        setStatus('Processing PDF locally...');
+        setStatus('Processing...');
 
         try {
-            // TODO: Add your PDF QR code scanning logic here
-            // For now, we'll use dummy data as an example
-            
-            // This is where you'd extract the QR code data from the PDF
-            // const certificateData = await extractQrDataFromPdf(file);
-            
-            // For testing, let's use dummy data:
+            // This is where you would normally extract data from the PDF's QR code.
+            // For now, we are using hardcoded dummy data for testing.
             const certificateData = {
                 studentName: "John Doe",
-                certificateId: "CERT12345",
-                course: "Web Development",
-                issueDate: "2025-10-02",
-                institution: "Tech University"
+                certificateId: `CERT-${Date.now()}`, // Unique ID for testing
+                course: "Full Stack Development",
+                issueDate: new Date().toISOString().split('T')[0],
+                institution: "Tech Legends University"
             };
 
-            const endpoint = userType === 'institution' 
+            const endpoint = userType === 'institution'
                 ? '/api/create-record'
                 : '/api/verify-record';
 
-            const payload = userType === 'institution'
-                ? { certificateData }
-                : { dataHash: createStableHash(certificateData) };
+            let payload;
+            if (userType === 'institution') {
+                payload = { certificateData };
+            } else {
+                const dataHash = createStableHash(certificateData);
+                payload = { dataHash };
+            }
 
-            setStatus('Sending data to server...');
+            setStatus('Contacting server...');
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
 
             const resData = await res.json();
 
             if (!res.ok) {
-                throw new Error(resData.message || 'An error occurred.');
+                throw new Error(resData.message || 'An unknown error occurred.');
             }
 
-            setStatus(resData.message || 'Success!');
+            setStatus(resData.message || 'Operation successful!');
             if (resData.verified) {
                 setResult(resData.certificate);
+            } else {
+                setResult(null); // Clear previous results on success/failure
             }
 
         } catch (error) {
@@ -74,7 +74,7 @@ const UploadComponent = ({ title, userType }) => {
         }
     };
 
-    // Helper function to create hash (same as backend)
+    // Synchronous hashing function using crypto-js
     const createStableHash = (data) => {
         const sortObject = (obj) => {
             if (typeof obj !== 'object' || obj === null) return obj;
@@ -85,25 +85,21 @@ const UploadComponent = ({ title, userType }) => {
         };
         const sortedData = sortObject(data);
         const stringToHash = JSON.stringify(sortedData);
-        
-        // Use Web Crypto API for hashing
-        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(stringToHash))
-            .then(hashBuffer => {
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            });
+        return SHA256(stringToHash).toString();
     };
 
     return (
         <div className="upload-container">
             <h2>{title}</h2>
-            <form onSubmit={handleSubmit}>
+            <div className="form-controls">
                 <input type="file" accept=".pdf" onChange={handleFileChange} disabled={loading} />
-                <button type="submit" disabled={!file || loading}>
+                <button onClick={handleSubmit} disabled={!file || loading}>
                     {loading ? 'Processing...' : 'Upload & Process'}
                 </button>
-            </form>
+            </div>
+            
             {status && <p className="status-message">{status}</p>}
+
             {result && (
                 <div className="result-container">
                     <h3>Verified Certificate Details:</h3>
