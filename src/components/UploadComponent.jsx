@@ -1,30 +1,22 @@
 import React, { useState } from 'react';
 import SHA256 from 'crypto-js/sha256';
-
-// PDF and QR Code Libraries
 import * as pdfjsLib from 'pdfjs-dist';
 import jsQR from 'jsqr';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
-    const [status, setStatus] = useState('');
+    const [status, setStatus] = useState({ message: '', type: '' });
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
-        setStatus('');
+        setStatus({ message: '', type: '' });
         setResult(null);
     };
 
-    /**
-     * Asynchronously extracts JSON data from a QR code embedded in a PDF file.
-     * @param {File} file The PDF file to process.
-     * @returns {Promise<object>} A promise that resolves with the parsed JSON object from the QR code.
-     */
     const extractQrDataFromPdf = (file) => {
         return new Promise((resolve, reject) => {
             const fileReader = new FileReader();
@@ -34,9 +26,9 @@ const UploadComponent = ({ title, userType }) => {
                 try {
                     const typedarray = new Uint8Array(fileReader.result);
                     const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    const page = await pdf.getPage(1); // Scan the first page
+                    const page = await pdf.getPage(1);
 
-                    const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better QR accuracy
+                    const viewport = page.getViewport({ scale: 2.0 });
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
@@ -48,7 +40,7 @@ const UploadComponent = ({ title, userType }) => {
                     const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                     if (code && code.data) {
-                        resolve(JSON.parse(code.data)); // Success! Parse and return the JSON.
+                        resolve(JSON.parse(code.data));
                     } else {
                         reject(new Error('No QR code could be found in the PDF.'));
                     }
@@ -57,21 +49,19 @@ const UploadComponent = ({ title, userType }) => {
                     reject(new Error('Failed to process PDF. Ensure it contains a valid QR code with JSON data.'));
                 }
             };
-            fileReader.onerror = () => {
-                reject(new Error('Failed to read the selected file.'));
-            };
+            fileReader.onerror = () => reject(new Error('Failed to read the selected file.'));
         });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!file) {
-            setStatus('Please select a PDF file.');
+            setStatus({ message: 'Please select a PDF file.', type: 'error' });
             return;
         }
 
         setLoading(true);
-        setStatus('Scanning PDF for QR code...');
+        setStatus({ message: 'Scanning PDF for QR code...', type: 'info' });
         setResult(null);
 
         try {
@@ -85,7 +75,7 @@ const UploadComponent = ({ title, userType }) => {
                 ? { certificateData }
                 : { dataHash: createStableHash(certificateData) };
 
-            setStatus('Contacting server...');
+            setStatus({ message: 'Contacting server...', type: 'info' });
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -98,13 +88,15 @@ const UploadComponent = ({ title, userType }) => {
                 throw new Error(resData.message || 'An unknown error occurred.');
             }
 
-            setStatus(resData.message || 'Operation successful!');
+            setStatus({ message: resData.message || 'Operation successful!', type: 'success' });
             if (resData.verified) {
-                setResult(resData.certificate);
+                setResult({ verified: true, data: resData.certificate });
+            } else if (resData.verified === false) {
+                setResult({ verified: false });
             }
 
         } catch (error) {
-            setStatus(`Error: ${error.message}`);
+            setStatus({ message: error.message, type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -123,6 +115,14 @@ const UploadComponent = ({ title, userType }) => {
         return SHA256(stringToHash).toString();
     };
 
+    // Helper function to format field names
+    const formatFieldName = (key) => {
+        return key
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, (str) => str.toUpperCase())
+            .trim();
+    };
+
     return (
         <div className="upload-container">
             <h2>{title}</h2>
@@ -133,12 +133,33 @@ const UploadComponent = ({ title, userType }) => {
                 </button>
             </div>
             
-            {status && <p className="status-message">{status}</p>}
+            {status.message && (
+                <p className={`status-message ${status.type}`}>
+                    {status.message}
+                </p>
+            )}
 
-            {result && (
+            {result && result.verified && result.data && (
                 <div className="result-container">
-                    <h3>Verified Certificate Details:</h3>
-                    <pre>{JSON.stringify(result, null, 2)}</pre>
+                    <div className="verified-badge">✓ Certificate Verified</div>
+                    <h3>Certificate Details</h3>
+                    <div className="certificate-details">
+                        {Object.entries(result.data).map(([key, value]) => (
+                            <div key={key} className="certificate-field">
+                                <span className="field-label">{formatFieldName(key)}:</span>
+                                <span className="field-value">{value}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {result && result.verified === false && (
+                <div className="result-container">
+                    <div className="not-verified-badge">✗ Certificate Not Verified</div>
+                    <p style={{ textAlign: 'center', color: '#666', marginTop: '10px' }}>
+                        This certificate could not be found in our database.
+                    </p>
                 </div>
             )}
         </div>
