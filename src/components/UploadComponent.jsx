@@ -17,39 +17,76 @@ const UploadComponent = ({ title, userType }) => {
         setResult(null);
     };
 
-    const extractQrDataFromPdf = (file) => {
+    const extractQrDataFromPdf = async (file) => {
+        const fileReader = new FileReader();
+        
         return new Promise((resolve, reject) => {
-            const fileReader = new FileReader();
             fileReader.readAsArrayBuffer(file);
 
             fileReader.onload = async () => {
                 try {
                     const typedarray = new Uint8Array(fileReader.result);
                     const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    const page = await pdf.getPage(1);
+                    const totalPages = pdf.numPages;
 
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
+                    const scales = [2.0, 3.0, 4.0, 1.5];
 
-                    await page.render({ canvasContext: context, viewport: viewport }).promise;
-                    
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
 
-                    if (code && code.data) {
-                        resolve(JSON.parse(code.data));
-                    } else {
-                        reject(new Error('No QR code could be found in the PDF.'));
+                        for (const scale of scales) {
+                            const viewport = page.getViewport({ scale });
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+
+                            await page.render({ 
+                                canvasContext: context, 
+                                viewport: viewport 
+                            }).promise;
+
+                            const imageData = context.getImageData(
+                                0, 0, canvas.width, canvas.height
+                            );
+
+                            const code = jsQR(
+                                imageData.data, 
+                                imageData.width, 
+                                imageData.height,
+                                { inversionAttempts: 'attemptBoth' }
+                            );
+
+                            if (code && code.data) {
+                                try {
+                                    const parsedData = JSON.parse(code.data);
+                                    console.log(`QR Code found on page ${pageNum} at scale ${scale}`);
+                                    resolve(parsedData);
+                                    return;
+                                } catch (e) {
+                                    console.log(`QR found on page ${pageNum} but not valid JSON`);
+                                }
+                            }
+                        }
                     }
+
+                    reject(new Error(
+                        `No valid QR code found in any of the ${totalPages} page(s). ` +
+                        `Ensure the PDF contains a QR code with JSON data.`
+                    ));
+
                 } catch (error) {
                     console.error("PDF Processing Error:", error);
-                    reject(new Error('Failed to process PDF. Ensure it contains a valid QR code with JSON data.'));
+                    reject(new Error(
+                        'Failed to process PDF. Ensure it is a valid PDF file ' +
+                        'containing a QR code with JSON data.'
+                    ));
                 }
             };
-            fileReader.onerror = () => reject(new Error('Failed to read the selected file.'));
+
+            fileReader.onerror = () => {
+                reject(new Error('Failed to read the selected file.'));
+            };
         });
     };
 
@@ -115,7 +152,6 @@ const UploadComponent = ({ title, userType }) => {
         return SHA256(stringToHash).toString();
     };
 
-    // Helper function to format field names
     const formatFieldName = (key) => {
         return key
             .replace(/([A-Z])/g, ' $1')
