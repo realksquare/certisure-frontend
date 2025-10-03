@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import SHA256 from 'crypto-js/sha256';
 
+// PDF and QR Code Libraries
+import * as pdfjsLib from 'pdfjs-dist';
+import jsQR from 'jsqr';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+
 const UploadComponent = ({ title, userType }) => {
     const [file, setFile] = useState(null);
     const [status, setStatus] = useState('');
@@ -13,6 +20,53 @@ const UploadComponent = ({ title, userType }) => {
         setResult(null);
     };
 
+    /**
+     * Asynchronously extracts JSON data from a QR code embedded in a PDF file.
+     * @param {File} file The PDF file to process.
+     * @returns {Promise<object>} A promise that resolves with the parsed JSON object from the QR code.
+     */
+    const extractQrDataFromPdf = (file) => {
+        return new Promise((resolve, reject) => {
+            const fileReader = new FileReader();
+            fileReader.readAsArrayBuffer(file);
+
+            fileReader.onload = async () => {
+                try {
+                    const typedarray = new Uint8Array(fileReader.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    const page = await pdf.getPage(1); // We'll scan the first page
+
+                    // Render the PDF page to a hidden canvas to get image data
+                    const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better QR accuracy
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    
+                    // Get the image data from the canvas
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    // Scan for a QR code
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code && code.data) {
+                        resolve(JSON.parse(code.data)); // Success! Parse and return the JSON.
+                    } else {
+                        reject(new Error('No QR code could be found in the PDF.'));
+                    }
+                } catch (error) {
+                    console.error("PDF Processing Error:", error);
+                    reject(new Error('Failed to process PDF. Ensure it contains a valid QR code with JSON data.'));
+                }
+            };
+            fileReader.onerror = () => {
+                reject(new Error('Failed to read the selected file.'));
+            };
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!file) {
@@ -21,30 +75,20 @@ const UploadComponent = ({ title, userType }) => {
         }
 
         setLoading(true);
-        setStatus('Processing...');
+        setStatus('Scanning PDF for QR code...');
+        setResult(null);
 
         try {
-            // This is where you would normally extract data from the PDF's QR code.
-            // For now, we are using hardcoded dummy data for testing.
-            const certificateData = {
-                studentName: "John Doe",
-                certificateId: `CERT-${Date.now()}`, // Unique ID for testing
-                course: "Full Stack Development",
-                issueDate: new Date().toISOString().split('T')[0],
-                institution: "Tech Legends University"
-            };
+            // --- REAL PDF SCANNING LOGIC IS NOW ACTIVE ---
+            const certificateData = await extractQrDataFromPdf(file);
 
             const endpoint = userType === 'institution'
                 ? '/api/create-record'
                 : '/api/verify-record';
 
-            let payload;
-            if (userType === 'institution') {
-                payload = { certificateData };
-            } else {
-                const dataHash = createStableHash(certificateData);
-                payload = { dataHash };
-            }
+            const payload = userType === 'institution'
+                ? { certificateData }
+                : { dataHash: createStableHash(certificateData) };
 
             setStatus('Contacting server...');
             const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, {
@@ -62,19 +106,15 @@ const UploadComponent = ({ title, userType }) => {
             setStatus(resData.message || 'Operation successful!');
             if (resData.verified) {
                 setResult(resData.certificate);
-            } else {
-                setResult(null); // Clear previous results on success/failure
             }
 
         } catch (error) {
             setStatus(`Error: ${error.message}`);
-            setResult(null);
         } finally {
             setLoading(false);
         }
     };
 
-    // Synchronous hashing function using crypto-js
     const createStableHash = (data) => {
         const sortObject = (obj) => {
             if (typeof obj !== 'object' || obj === null) return obj;
